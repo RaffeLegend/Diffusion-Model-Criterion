@@ -38,6 +38,7 @@ from criteria.base import (
 # Import all criterion implementations to register them
 from criteria.pde_criterion import PDECriterion
 from criteria.clip_criterion import CLIPCriterion
+from criteria.clip_criterion_enhanced import EnhancedCLIPCriterion, CLIPWithDSIRCriterion
 
 # Optional: Import template for reference (comment out in production)
 # from criteria.template_criterion import TemplateCriterion
@@ -54,4 +55,5 @@ __all__ = [
     # Concrete implementations
     "PDECriterion",
     "CLIPCriterion",
+    "EnhancedCLIPCriterion"
 ]

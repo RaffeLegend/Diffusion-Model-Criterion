@@ -64,6 +64,8 @@ class ImageProcessor:
         """
         Preprocess images to [-1, 1] range BCHW format.
         
+        与原始代码保持一致: 先转half再处理
+        
         Args:
             images: List of tensors, each (H, W, C) with values in [0, 255]
             
@@ -72,18 +74,16 @@ class ImageProcessor:
         """
         processed = []
         for img in images:
-            # Convert to float and permute: HWC -> CHW
-            img = img.float().permute(2, 0, 1)
+            # 与原始代码一致: permute后直接转half
+            img = img.permute(2, 0, 1).to(self.device).half()
             img = self.resize_and_crop(img, self.config.image_size)
             processed.append(img)
         
-        # Stack and normalize to [-1, 1]
+        # Stack
         batch = torch.stack(processed)
-        batch = 2.0 * (batch / 255.0) - 1.0
         
-        # Convert to target dtype
-        if self.dtype == torch.float16:
-            batch = batch.half()
+        # Scale dynamic range [0, 255] -> [-1, 1]
+        batch = 2.0 * (batch / 255.0) - 1.0
         
         return batch
     

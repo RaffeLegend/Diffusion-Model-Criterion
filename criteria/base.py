@@ -156,6 +156,8 @@ class BaseCriterion(ABC):
         """
         Compute text embeddings for prompts using SD's text encoder.
         
+        注意: 此方法返回的tensor需要调用者在用完后手动del以释放显存
+        
         Args:
             prompts: List of text prompts
             num_repeats: Number of times to repeat each prompt's embedding
@@ -187,6 +189,7 @@ class BaseCriterion(ABC):
         with torch.no_grad():
             text_emb = text_encoder(input_ids).last_hidden_state
         
+        del input_ids  # 释放
         return text_emb
     
     def encode_images_to_latents(self, images: torch.Tensor) -> torch.Tensor:
@@ -219,10 +222,10 @@ class BaseCriterion(ABC):
         """
         vae = self.model_manager.vae
         
-        latents = latents / vae.config.scaling_factor
+        latents_scaled = latents / vae.config.scaling_factor
         
         with torch.no_grad():
-            decoded = vae.decode(latents.half()).sample
+            decoded = vae.decode(latents_scaled.half()).sample
         
         return decoded
     
