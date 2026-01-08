@@ -39,6 +39,10 @@ from criteria.base import (
 from criteria.pde_criterion import PDECriterion
 from criteria.clip_criterion import CLIPCriterion
 from criteria.clip_criterion_enhanced import EnhancedCLIPCriterion, CLIPWithDSIRCriterion
+from criteria.clip_criterion_high_order import HighOrderCLIPCriterion
+from criteria.clip_criterion_latent import LatentSpaceCriterion
+from criteria.fpde_criterion import FPDECriterion
+from criteria.score_laplacian_criterion import ScoreLaplacianCriterion
 
 # Optional: Import template for reference (comment out in production)
 # from criteria.template_criterion import TemplateCriterion
@@ -55,5 +59,7 @@ __all__ = [
     # Concrete implementations
     "PDECriterion",
     "CLIPCriterion",
-    "EnhancedCLIPCriterion"
+    "EnhancedCLIPCriterion",
+    "HighOrderCLIPCriterion",
+    "CLIPWithDSIRCriterion"
 ]

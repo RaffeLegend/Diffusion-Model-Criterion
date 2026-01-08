@@ -640,9 +640,17 @@ class CLIPWithDSIRCriterion(BaseCriterion):
             dsir_h = np.mean([self.compute_dsir_energy(h_chunk[j]) for j in range(h_chunk.shape[0])])
             
             # 组合：原文criterion + DSIR差异
-            # 生成图像的DSIR能量通常更高
+            # 需要归一化DSIR项到合理范围
+            # 方法1: 用比值而不是差值
+            dsir_ratio = dsir_h / (dsir_x0 + 1e-8)
+            # 归一化到 [0, 1] 范围，假设比值通常在 [0.5, 2] 之间
+            dsir_normalized = np.clip((dsir_ratio - 0.5) / 1.5, 0, 1)
+            
+            # 方法2: 保留差值用于调试
             dsir_diff = dsir_h - dsir_x0
-            criterion = C_manifold + self.dsir_weight * dsir_diff
+            
+            # 使用归一化后的值
+            criterion = C_manifold + self.dsir_weight * dsir_normalized
             
             result = {"criterion": float(criterion)}
             
@@ -652,6 +660,8 @@ class CLIPWithDSIRCriterion(BaseCriterion):
                     "dsir_x0": float(dsir_x0),
                     "dsir_h": float(dsir_h),
                     "dsir_diff": float(dsir_diff),
+                    "dsir_ratio": float(dsir_ratio),
+                    "dsir_normalized": float(dsir_normalized),
                 })
             
             results.append(result)

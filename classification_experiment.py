@@ -184,26 +184,32 @@ def compute_scores(
 
 def calibrate_threshold_zeroshot(
     calibration_scores: np.ndarray,
-    n_std: float = 1.0
-) -> Tuple[float, float, float]:
+    n_std: float = 1.0,
+    direction: str = "auto"
+) -> Tuple[float, float, float, str]:
     """
     Zero-shot 阈值校准 (论文 Figure 4a)
     
     仅使用 Real 图片的分数来确定阈值：
-    threshold = mean + n_std * std
+    - 如果 higher_is_fake: threshold = mean + n_std * std
+    - 如果 lower_is_fake: threshold = mean - n_std * std
     
     Args:
         calibration_scores: 校准集 (Real 图片) 的分数
         n_std: 标准差倍数，论文用 1.0
+        direction: "higher_is_fake", "lower_is_fake", or "auto"
     
     Returns:
-        threshold, mean, std
+        threshold, mean, std, direction
     """
     mean = calibration_scores.mean()
     std = calibration_scores.std()
-    threshold = mean + n_std * std
     
-    return threshold, mean, std
+    # 返回两个阈值，让后续根据测试集决定方向
+    threshold_high = mean + n_std * std  # 用于 higher_is_fake
+    threshold_low = mean - n_std * std   # 用于 lower_is_fake
+    
+    return threshold_high, threshold_low, mean, std
 
 
 def classify_zeroshot(
@@ -580,9 +586,11 @@ def run_zeroshot_experiment(
     print()
     
     # 3. 确定阈值
-    print("[3/5] 确定阈值 (mean + 1*std)...")
-    threshold, cal_mean, cal_std = calibrate_threshold_zeroshot(calibration_scores, n_std=1.0)
-    print(f"阈值 = {cal_mean:.6f} + 1 × {cal_std:.6f} = {threshold:.6f}")
+    print("[3/5] 确定阈值 (mean ± 1*std)...")
+    threshold_high, threshold_low, cal_mean, cal_std = calibrate_threshold_zeroshot(calibration_scores, n_std=1.0)
+    print(f"校准集: mean={cal_mean:.6f}, std={cal_std:.6f}")
+    print(f"阈值 (higher_is_fake): {threshold_high:.6f}")
+    print(f"阈值 (lower_is_fake): {threshold_low:.6f}")
     print()
     
     # 4. 加载测试集
@@ -616,13 +624,30 @@ def run_zeroshot_experiment(
     scores_path = os.path.join(output_dir, f'scores_{criterion_name}_{timestamp}.csv')
     df.to_csv(scores_path, index=False)
     
+    # 自动检测方向：比较 real 和 fake 的均值
+    real_scores = test_scores[test_labels == 0]
+    fake_scores = test_scores[test_labels == 1]
+    
+    print(f"Real scores: mean={real_scores.mean():.4f}, std={real_scores.std():.4f}")
+    print(f"Fake scores: mean={fake_scores.mean():.4f}, std={fake_scores.std():.4f}")
+    
+    if fake_scores.mean() > real_scores.mean():
+        higher_is_fake = True
+        threshold = threshold_high
+        print(f"检测到: Fake分数更高 -> 使用 higher_is_fake, threshold={threshold:.4f}")
+    else:
+        higher_is_fake = False
+        threshold = threshold_low
+        print(f"检测到: Real分数更高 -> 使用 lower_is_fake, threshold={threshold:.4f}")
+    print()
+    
     # 计算指标
     metrics = compute_full_metrics(test_scores, test_labels, threshold)
     
     # Zero-shot 分类结果
     zs_results = classify_zeroshot(
         test_scores, test_labels, threshold, 
-        higher_is_fake=metrics['higher_is_fake']
+        higher_is_fake=higher_is_fake
     )
     
     # 生成可视化
@@ -639,7 +664,8 @@ def run_zeroshot_experiment(
         f"  校准集大小: {len(calibration_scores)} (仅 Real)",
         f"  校准集 Mean: {cal_mean:.6f}",
         f"  校准集 Std: {cal_std:.6f}",
-        f"  阈值 (mean + 1σ): {threshold:.6f}",
+        f"  检测方向: {'higher_is_fake' if higher_is_fake else 'lower_is_fake'}",
+        f"  使用阈值: {threshold:.6f}",
         "",
         "【测试集统计】",
         f"  Real 样本数: {(test_labels == 0).sum()}",
@@ -648,12 +674,15 @@ def run_zeroshot_experiment(
         "【测试集分数】",
         f"  Real Mean: {metrics['real_mean']:.6f} ± {metrics['real_std']:.6f}",
         f"  Fake Mean: {metrics['fake_mean']:.6f} ± {metrics['fake_std']:.6f}",
-        f"  方向: {'higher_is_fake' if metrics['higher_is_fake'] else 'lower_is_fake'}",
+        f"  分数差异: {abs(metrics['fake_mean'] - metrics['real_mean']):.6f}",
         "",
         "【Zero-shot 分类结果】(论文 Table 1 格式)",
         f"  AUC: {zs_results['auc']:.4f}",
         f"  AP:  {zs_results['ap']:.4f}",
         f"  Accuracy: {zs_results['accuracy']:.4f}",
+        f"  Precision: {zs_results['precision']:.4f}",
+        f"  Recall: {zs_results['recall']:.4f}",
+        f"  F1: {zs_results['f1']:.4f}",
         "",
         "【使用最优阈值的结果】(参考，非 zero-shot)",
         f"  最优阈值: {metrics['optimal_threshold']:.6f}",
@@ -832,7 +861,7 @@ def parse_args():
     
     # 评估参数
     parser.add_argument("--criterion", type=str, default="clip",
-                       choices=["clip", "clip_v2", "pde", "clip_with_dsir", "clip_enhanced"])
+                       choices=["clip", "clip_v2", "pde", "clip_with_dsir", "clip_enhanced", "clip_high_order", "latent", "pde_criterion", "fpde", "score_laplacian"])
     parser.add_argument("--batch-size", type=int, default=2)
     parser.add_argument("--num-noise", type=int, default=64,
                        help="球面扰动数量 (论文用 64)")
