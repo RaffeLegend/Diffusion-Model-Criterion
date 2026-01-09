@@ -46,20 +46,24 @@ import matplotlib.pyplot as plt
 
 def find_images(directory: str, recursive: bool = False) -> List[str]:
     """查找目录中的所有图片"""
-    extensions = ('.jpg', '.jpeg', '.png', '.bmp', '.webp')
+    extensions = ('.jpg', '.jpeg', '.png', '.bmp', '.webp', '.PNG', '.JPG', '.JPEG')
     directory = Path(directory)
     image_paths = []
     
-    if recursive:
-        for ext in extensions:
-            image_paths.extend(directory.rglob(f"*{ext}"))
-            image_paths.extend(directory.rglob(f"*{ext.upper()}"))
-    else:
-        for ext in extensions:
-            image_paths.extend(directory.glob(f"*{ext}"))
-            image_paths.extend(directory.glob(f"*{ext.upper()}"))
+    if not directory.exists():
+        print(f"警告: 目录不存在 {directory}")
+        return []
     
-    return sorted([str(p) for p in image_paths])
+    if recursive:
+        for f in directory.rglob("*"):
+            if f.is_file() and f.suffix.lower() in ['.jpg', '.jpeg', '.png', '.bmp', '.webp']:
+                image_paths.append(str(f))
+    else:
+        for f in directory.iterdir():
+            if f.is_file() and f.suffix.lower() in ['.jpg', '.jpeg', '.png', '.bmp', '.webp']:
+                image_paths.append(str(f))
+    
+    return sorted(image_paths)
 
 
 def load_dataset_with_methods(
@@ -172,8 +176,8 @@ def load_calibration_set(
     """
     加载校准集 (仅 Real 图片)
     
-    支持两种方式:
-    1. 直接指定一个包含 real 图片的目录
+    支持多种方式:
+    1. 直接指定一个包含 real 图片的目录 (如 .../0_real)
     2. 指定与 test_dir 相同结构的目录，自动收集所有方法的 0_real
     """
     calibration_path = Path(calibration_dir)
@@ -181,34 +185,54 @@ def load_calibration_set(
     
     real_names = {'0_real', 'real', '0', 'Real', '0_Real'}
     
-    # 检查是否是方法目录结构
-    subdirs = [d for d in calibration_path.iterdir() if d.is_dir()]
-    subdir_names = {d.name for d in subdirs}
-    
-    # 如果子目录不是 real/fake 命名，说明是方法目录结构
-    if not (subdir_names & real_names):
-        # 遍历每个方法目录收集 real 图片
-        for method_dir in subdirs:
-            method_subdirs = [d.name for d in method_dir.iterdir() if d.is_dir()]
+    # 首先尝试直接在当前目录找图片
+    direct_images = find_images(str(calibration_path), recursive=False)
+    if direct_images:
+        real_paths = direct_images
+        print(f"直接从 {calibration_dir} 加载图片")
+    else:
+        # 检查子目录
+        subdirs = [d for d in calibration_path.iterdir() if d.is_dir()]
+        
+        if not subdirs:
+            # 没有子目录也没有图片，尝试递归搜索
+            real_paths = find_images(str(calibration_path), recursive=True)
+        else:
+            subdir_names = {d.name for d in subdirs}
             
-            if set(method_subdirs) & real_names:
-                # 结构1: method/0_real
-                for subdir in method_dir.iterdir():
-                    if subdir.is_dir() and subdir.name in real_names:
-                        real_paths.extend(find_images(str(subdir), recursive=True))
-            else:
-                # 结构2: method/scene/0_real
-                for scene_dir in method_dir.iterdir():
-                    if scene_dir.is_dir():
-                        for subdir in scene_dir.iterdir():
+            # 如果子目录不是 real/fake 命名，说明是方法目录结构
+            if not (subdir_names & real_names):
+                # 遍历每个方法目录收集 real 图片
+                for method_dir in subdirs:
+                    method_subdirs_list = list(method_dir.iterdir())
+                    method_subdirs = [d.name for d in method_subdirs_list if d.is_dir()]
+                    
+                    if set(method_subdirs) & real_names:
+                        # 结构1: method/0_real
+                        for subdir in method_subdirs_list:
                             if subdir.is_dir() and subdir.name in real_names:
                                 real_paths.extend(find_images(str(subdir), recursive=True))
-    else:
-        # 直接是 real 图片目录
+                    else:
+                        # 结构2: method/scene/0_real
+                        for scene_dir in method_subdirs_list:
+                            if scene_dir.is_dir():
+                                for subdir in scene_dir.iterdir():
+                                    if subdir.is_dir() and subdir.name in real_names:
+                                        real_paths.extend(find_images(str(subdir), recursive=True))
+            else:
+                # 子目录是 real/fake，找 real 目录
+                for subdir in subdirs:
+                    if subdir.name in real_names:
+                        real_paths.extend(find_images(str(subdir), recursive=True))
+    
+    if len(real_paths) == 0:
+        # 最后尝试递归搜索
         real_paths = find_images(str(calibration_path), recursive=True)
     
     if len(real_paths) == 0:
-        raise ValueError(f"在 {calibration_dir} 中找不到 real 图片")
+        raise ValueError(f"在 {calibration_dir} 中找不到图片")
+    
+    print(f"找到 {len(real_paths)} 张图片")
     
     if len(real_paths) < n_calibration:
         print(f"警告: 校准集只有 {len(real_paths)} 张图片")
