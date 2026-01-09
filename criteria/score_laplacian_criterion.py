@@ -111,7 +111,7 @@ class ScoreLaplacianCriterion(BaseCriterion):
         return torch.cat(all_feats, dim=0)
     
     def get_enhanced_features(self, imgs: np.ndarray) -> torch.Tensor:
-        """计算增强特征: CLIP(h) + λ·CLIP(Δh)"""
+        """计算增强特征: CLIP(h) - λ·CLIP(Δh)  (减法！)"""
         # 原始特征
         feats_orig = self.get_clip_features(imgs)
         feats_orig = F.normalize(feats_orig, p=2, dim=1)
@@ -121,8 +121,8 @@ class ScoreLaplacianCriterion(BaseCriterion):
         feats_lap = self.get_clip_features(imgs_lap)
         feats_lap = F.normalize(feats_lap, p=2, dim=1)
         
-        # 融合
-        enhanced = feats_orig + self.lam * feats_lap
+        # 融合：减法
+        enhanced = feats_orig - self.lam * feats_lap
         
         return enhanced
     
