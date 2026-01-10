@@ -43,6 +43,7 @@ from criteria.clip_criterion_high_order import HighOrderCLIPCriterion
 from criteria.clip_criterion_latent import LatentSpaceCriterion
 from criteria.fpde_criterion import FPDECriterion
 from criteria.score_laplacian_criterion import ScoreLaplacianCriterion
+from criteria.score_laplacian_criterion_fast import ScoreLaplacianCriterionFast
 
 # Optional: Import template for reference (comment out in production)
 # from criteria.template_criterion import TemplateCriterion

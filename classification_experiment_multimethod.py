@@ -540,8 +540,8 @@ def parse_args():
     parser.add_argument("--criterion", type=str, default="clip",
                        choices=["clip", "clip_v2", "pde", "clip_with_dsir", 
                                "clip_enhanced", "clip_high_order", "latent", 
-                               "pde_criterion", "fpde", "score_laplacian"])
-    parser.add_argument("--batch-size", type=int, default=4)
+                               "pde_criterion", "fpde", "score_laplacian", "score_laplacian_fast"])
+    parser.add_argument("--batch-size", type=int, default=2)
     parser.add_argument("--num-noise", type=int, default=64)
     parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument("--output-dir", type=str, default="results")
