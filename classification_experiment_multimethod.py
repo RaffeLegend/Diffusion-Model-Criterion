@@ -41,6 +41,24 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
+# ==================== data saving ===============
+import numpy as np
+
+def to_json_serializable(obj):
+    if isinstance(obj, dict):
+        return {k: to_json_serializable(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [to_json_serializable(v) for v in obj]
+    elif isinstance(obj, tuple):
+        return [to_json_serializable(v) for v in obj]
+    elif isinstance(obj, np.bool_):
+        return bool(obj)
+    elif isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, np.floating):
+        return float(obj)
+    else:
+        return obj
 
 # ==================== 数据加载 ====================
 
@@ -490,6 +508,7 @@ def run_zeroshot_experiment_multimethod(
     
     # 保存 JSON
     json_path = os.path.join(output_dir, f'results_{criterion_name}_{timestamp}.json')
+    results_to_save = to_json_serializable(results_to_save)
     with open(json_path, 'w') as f:
         json.dump(results_to_save, f, indent=2)
     print(f"\n结果已保存到: {json_path}")
