@@ -126,8 +126,8 @@ def load_dataset_with_methods(
     labels = []
     methods = []
     
-    real_names = {'0_real', 'real', '0', 'Real', '0_Real'}
-    fake_names = {'1_fake', 'fake', '1', 'Fake', '1_Fake'}
+    real_names = {'0_real', 'real', '0', 'Real', '0_Real', 'nature'}
+    fake_names = {'1_fake', 'fake', '1', 'Fake', '1_Fake', 'ai'}
     
     # 遍历每个方法目录
     method_dirs = sorted([d for d in dataset_path.iterdir() if d.is_dir()])

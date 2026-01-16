@@ -40,7 +40,7 @@ class EvalConfig:
     
     # ===== 新增: 增强版参数 =====
     dsir_weight: float = 0.01              # clip_with_dsir 用
-    lambda_high_order: float = 0.1         # clip_enhanced 用
+    lambda_high_order: float = 0.5         # clip_enhanced 用
     high_order_type: str = "laplacian"     # laplacian/biharmonic/dsir
     lambda_high_order = 0.3
     pde_epsilon = 0.01  # 默认，可改成 0.0001 更小
