@@ -1,0 +1,1 @@
+CUDA_VISIBLE_DEVICES=1 python generate_panels.py --image /mnt/nas_d/data/deepfake/collected_dataset/tiny-genimage/versions/1/imagenet_ai_0419_biggan/train/ai/999_biggan_00190.png  --output_dir visual_fake --label fake
