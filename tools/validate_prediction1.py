@@ -105,6 +105,9 @@ def compute_fft_energy(x):
     """
     B, C, H, W = x.shape
     
+    # Convert to float32 for FFT (doesn't support float16)
+    x = x.float()
+    
     # Compute 2D FFT for each channel
     fft = torch.fft.fft2(x, dim=(-2, -1))
     fft_shifted = torch.fft.fftshift(fft, dim=(-2, -1))
@@ -153,20 +156,23 @@ def compute_high_freq_energy_ratio(x, K_ratio):
 
 def compute_laplacian_norm(x):
     """
-    Compute ||Δx||^2.
+    Compute mean absolute Laplacian: (1/HWC) * sum |Δx|
     
     Args:
         x: tensor of shape (B, C, H, W)
     
     Returns:
-        norms: tensor of shape (B,) - Laplacian L2 norm squared
+        norms: tensor of shape (B,)
     """
+    # Convert to float32
+    x = x.float()
+    
     # 3x3 Laplacian kernel
     laplacian_kernel = torch.tensor([
         [0, 1, 0],
         [1, -4, 1],
         [0, 1, 0]
-    ], dtype=x.dtype, device=x.device).view(1, 1, 3, 3)
+    ], dtype=torch.float32, device=x.device).view(1, 1, 3, 3)
     
     # Apply to each channel
     B, C, H, W = x.shape
@@ -174,8 +180,8 @@ def compute_laplacian_norm(x):
     laplacian = F.conv2d(x_reshaped, laplacian_kernel, padding=1)
     laplacian = laplacian.view(B, C, H, W)
     
-    # Compute L2 norm squared
-    norms = (laplacian ** 2).sum(dim=(1, 2, 3))  # (B,)
+    # Mean absolute value (pixel-wise mean)
+    norms = laplacian.abs().mean(dim=(1, 2, 3))
     
     return norms
 
@@ -202,18 +208,37 @@ class DiffusionProbe:
         # Extract components
         self.vae = self.pipe.vae
         self.unet = self.pipe.unet
+        self.text_encoder = self.pipe.text_encoder
+        self.tokenizer = self.pipe.tokenizer
         self.scheduler = DDPMScheduler.from_config(self.pipe.scheduler.config)
         
         # Set to eval mode
         self.vae.eval()
         self.unet.eval()
+        self.text_encoder.eval()
         
         # Precompute timestep
         self.scheduler.set_timesteps(Config.num_inference_steps)
         t_idx = int(Config.timestep_ratio * Config.num_inference_steps)
         self.timestep = self.scheduler.timesteps[t_idx]
         
+        # Precompute empty text embedding (unconditional)
+        self._precompute_empty_embedding()
+        
         print(f"Using timestep: {self.timestep.item()} (t/T = {Config.timestep_ratio})")
+    
+    @torch.no_grad()
+    def _precompute_empty_embedding(self):
+        """Precompute empty text embedding for unconditional generation."""
+        text_input = self.tokenizer(
+            [""],
+            padding="max_length",
+            max_length=self.tokenizer.model_max_length,
+            truncation=True,
+            return_tensors="pt",
+        )
+        self.empty_embedding = self.text_encoder(text_input.input_ids.to(self.device))[0]
+        # Shape: (1, 77, 768)
     
     @torch.no_grad()
     def get_h_dec(self, images, num_samples=1):
@@ -237,6 +262,9 @@ class DiffusionProbe:
         latent_dist = self.vae.encode(images).latent_dist
         z0 = latent_dist.sample() * self.vae.config.scaling_factor
         
+        # Expand empty embedding to batch size
+        encoder_hidden_states = self.empty_embedding.expand(B, -1, -1)
+        
         h_dec_list = []
         
         for _ in range(num_samples):
@@ -256,7 +284,7 @@ class DiffusionProbe:
             
             # UNet prediction
             t_batch = self.timestep.expand(B).to(self.device)
-            h = self.unet(z_t, t_batch, encoder_hidden_states=None).sample
+            h = self.unet(z_t, t_batch, encoder_hidden_states=encoder_hidden_states).sample
             
             # Decode
             h_dec = self.vae.decode(h / self.vae.config.scaling_factor).sample
